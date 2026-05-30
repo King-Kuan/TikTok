@@ -340,17 +340,10 @@ async function startServer() {
   });
 }
 
-// Only start standalone server when not in a serverless function context (e.g. Vercel, Google Cloud Functions)
-const isServerless = !!process.env.VERCEL || 
-                     !!process.env.NOW_REGION ||
-                     !!process.env.FUNCTION_TARGET || 
-                     !!process.env.FUNCTIONS_SIGNATURE_TYPE ||
-                     !!process.env.AWS_LAMBDA_FUNCTION_NAME ||
-                     !!process.env.LAMBDA_TASK_ROOT ||
-                     !!process.env._HANDLER ||
-                     (process.env.NODE_ENV === 'production' && !process.env.K_SERVICE && !process.env.PORT);
+// Only start standalone server when not in a Vercel serverless function context page
+const isVercel = !!process.env.VERCEL || !!process.env.NOW_REGION;
 
-if (!isServerless) {
+if (!isVercel) {
   startServer();
 }
 
