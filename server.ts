@@ -14,16 +14,18 @@ const firebaseConfigPath = path.resolve(process.cwd(), 'firebase-applet-config.j
 let firebaseConfig: any = null;
 
 const possiblePaths = [
-  path.resolve(process.cwd(), 'firebase-applet-config.json'),
-  path.resolve(new URL('.', import.meta.url).pathname, 'firebase-applet-config.json'),
-  path.resolve(new URL('.', import.meta.url).pathname, '../firebase-applet-config.json'),
+  firebaseConfigPath,
 ];
+
+if (typeof __dirname !== 'undefined') {
+  possiblePaths.push(path.resolve(__dirname, 'firebase-applet-config.json'));
+  possiblePaths.push(path.resolve(__dirname, '../firebase-applet-config.json'));
+}
 
 for (const p of possiblePaths) {
   try {
-    const cleanPath = p.replace(/^file:\/\//, '');
-    if (fs.existsSync(cleanPath)) {
-      firebaseConfig = JSON.parse(fs.readFileSync(cleanPath, 'utf8'));
+    if (fs.existsSync(p)) {
+      firebaseConfig = JSON.parse(fs.readFileSync(p, 'utf8'));
       break;
     }
   } catch (err) {
