@@ -16,8 +16,17 @@ export default function App() {
   const [youtubeUrl, setYoutubeUrl] = useState('');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (u && u.email !== 'fridomiamovement@gmail.com') {
+        try {
+          await auth.signOut();
+        } catch (e) {
+          console.error('Failed automated signout:', e);
+        }
+        setUser(null);
+      } else {
+        setUser(u);
+      }
       setAuthInitializing(false);
     });
     return () => unsubscribe();

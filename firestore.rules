@@ -9,7 +9,7 @@ service cloud.firestore {
 
     // Common helper functions
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.email == 'fridomiamovement@gmail.com';
     }
 
     function isValidId(id) {
