@@ -53,12 +53,11 @@ app.post('/api/load-video-info', async (req, res) => {
       const response = await ai.models.generateContent({
         model: 'gemini-3.5-flash',
         contents: `Analyze YouTube Video link: ${youtubeUrl}.
-1. Search Google to retrieve its real actual video title.
+1. Reason about the keywords, slug, or content markers inside the link to deduce its likely authentic video title.
 2. Draft a highly realistic, word-for-word spoken transcript outline (around 200 words) summarizing the core informational hook statements of this video as if spoken by the main narrator.
 Return the result in JSON shape matching the schema strictly.`,
         config: {
           responseMimeType: 'application/json',
-          tools: [{ googleSearch: {} }],
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -81,7 +80,8 @@ Return the result in JSON shape matching the schema strictly.`,
       }
     }
   } catch (error: any) {
-    console.warn("Gemini transcript auto-loader warning (using template fallback):", error.message || error);
+    const errMsg = error ? (error.message || String(error)) : "Unknown Error";
+    console.warn("Gemini transcript auto-loader warning (using template fallback):", errMsg);
     title = videoId ? `Video ID: ${videoId}` : "Unscanned Video Link";
     transcriptText = "Narrator speech transcript draft could not be auto-loaded. Please enter or paste the transcript context here directly to let the system generate exact 30-60s clip markers.";
   }
@@ -158,7 +158,6 @@ Based on this transcript, identify between 5 and 20 high-engagement, viral clips
         config: {
           systemInstruction,
           responseMimeType: 'application/json',
-          tools: transcript ? [] : [{ googleSearch: {} }], // Grounding only when we don't have the explicit transcript
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -207,7 +206,8 @@ Based on this transcript, identify between 5 and 20 high-engagement, viral clips
 
       outputObj = JSON.parse(cleanedText);
     } catch (aiErr: any) {
-      console.warn("Gemini API call warning (falling back to high-fidelity simulator):", aiErr.message || aiErr);
+      const errMsg = aiErr ? (aiErr.message || String(aiErr)) : "Unknown Error";
+      console.warn("Gemini API call warning (falling back to high-fidelity simulator):", errMsg);
       
       const mockTopics = [
         {
@@ -388,8 +388,7 @@ app.use((err: any, req: any, res: any, next: any) => {
 // Serving UI and handling Dev Middleware Setup
 
 async function startServer() {
-  const isProduction = process.env.NODE_ENV === 'production' || 
-                        fs.existsSync(path.resolve(process.cwd(), 'dist/index.html'));
+  const isProduction = process.env.NODE_ENV === 'production';
 
   if (!isProduction) {
     const vite = await createViteServer({
