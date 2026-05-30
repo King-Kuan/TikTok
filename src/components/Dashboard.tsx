@@ -1,6 +1,6 @@
 import { useState, useEffect, MouseEvent } from 'react';
 import { collection, query, where, onSnapshot, getDocs, doc, deleteDoc, orderBy, setDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { ShortsJob, TikTokClip } from '../types';
 import { Plus, Link, Timer, Film, Edit, Sparkles, Youtube, CheckCircle2, AlertTriangle, LogOut, Check, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -66,7 +66,7 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
         setActiveJobId(parsedJobs[0].id);
       }
     }, (error) => {
-      console.error("Firestore listening error:", error);
+      handleFirestoreError(error, OperationType.LIST, 'jobs');
     });
 
     return () => unsubscribe();
@@ -92,6 +92,8 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
       });
 
       setClipsByJob(prev => ({ ...prev, [activeJobId]: parsedClips }));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `jobs/${activeJobId}/clips`);
     });
 
     return () => unsubscribe();
@@ -163,7 +165,11 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
       };
 
       // 1. Create Job document in Firestore
-      await setDoc(doc(db, 'jobs', jobId), jobDoc);
+      try {
+        await setDoc(doc(db, 'jobs', jobId), jobDoc);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `jobs/${jobId}`);
+      }
 
       // 2. Create sub-clips in Firestore
       const clipsList = data.clips || [];
@@ -187,7 +193,11 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
           createdAt: new Date().toISOString()
         };
 
-        await setDoc(doc(db, 'jobs', jobId, 'clips', clipId), dbClipDoc);
+        try {
+          await setDoc(doc(db, 'jobs', jobId, 'clips', clipId), dbClipDoc);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, `jobs/${jobId}/clips/${clipId}`);
+        }
       }
 
       setYoutubeUrl('');
@@ -208,7 +218,7 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
         setActiveJobId(null);
       }
     } catch (err) {
-      console.error("Failed to delete job profile:", err);
+      handleFirestoreError(err, OperationType.DELETE, `jobs/${jobId}`);
     }
   };
 

@@ -3,7 +3,7 @@ import { Play, Pause, RotateCcw, Check, Sparkles, Type, Film, Download, ArrowLef
 import { TikTokClip, SubtitleWord } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 
 interface ShortsStudioProps {
   clip: TikTokClip;
@@ -94,7 +94,7 @@ export default function ShortsStudio({ clip, youtubeUrl, onBack, onClipUpdated }
       onClipUpdated(newClip);
       setEditingSubIndex(null);
     } catch (err) {
-      console.error('Failed to update subtitle word:', err);
+      handleFirestoreError(err, OperationType.UPDATE, `jobs/${clip.jobId}/clips/${clip.id}`);
     }
   };
 
@@ -103,7 +103,11 @@ export default function ShortsStudio({ clip, youtubeUrl, onBack, onClipUpdated }
     try {
       // Set to rendering on both DB and client state instantly
       const clipRef = doc(db, 'jobs', clip.jobId, 'clips', clip.id);
-      await updateDoc(clipRef, { status: 'rendering' });
+      try {
+        await updateDoc(clipRef, { status: 'rendering' });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `jobs/${clip.jobId}/clips/${clip.id}`);
+      }
       setRenderedClip({ ...renderedClip, status: 'rendering' });
 
       // Call API server endpoint to handle asynchronous processing
@@ -142,7 +146,7 @@ export default function ShortsStudio({ clip, youtubeUrl, onBack, onClipUpdated }
               return updated;
             });
           } catch (err) {
-            console.error("Failed to update clip status in Firestore:", err);
+            handleFirestoreError(err, OperationType.UPDATE, `jobs/${clip.jobId}/clips/${clip.id}`);
             setRenderedClip((current) => ({ ...current, status: 'failed' }));
           }
           return;
@@ -151,7 +155,11 @@ export default function ShortsStudio({ clip, youtubeUrl, onBack, onClipUpdated }
 
     } catch (error) {
       console.error('Render trigger failed:', error);
-      await updateDoc(doc(db, 'jobs', clip.jobId, 'clips', clip.id), { status: 'failed' });
+      try {
+        await updateDoc(doc(db, 'jobs', clip.jobId, 'clips', clip.id), { status: 'failed' });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `jobs/${clip.jobId}/clips/${clip.id}`);
+      }
       setRenderedClip({ ...renderedClip, status: 'failed' });
     }
   };

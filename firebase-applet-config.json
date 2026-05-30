@@ -1,10 +1,10 @@
 {
   "projectId": "tiktok-c866e",
-  "appId": "1:719818976101:web:eecc19134aa69d7cf60f8c",
+  "appId": "1:719818976101:web:945bb85ea0ae15f3f60f8c",
   "apiKey": "AIzaSyBkPsCczzSyRa4CMfV0abM0pjjVJqxqwR4",
   "authDomain": "tiktok-c866e.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
+  "firestoreDatabaseId": "ai-studio-dee50dcf-d502-4916-b337-bd49e5404586",
   "storageBucket": "tiktok-c866e.firebasestorage.app",
   "messagingSenderId": "719818976101",
-  "measurementId": "G-H53XGQRHKB"
+  "measurementId": ""
 }
