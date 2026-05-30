@@ -11,9 +11,36 @@ import fs from 'fs';
 dotenv.config();
 
 const firebaseConfigPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
-const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
+let firebaseConfig: any = null;
 
-const app = express();
+const possiblePaths = [
+  path.resolve(process.cwd(), 'firebase-applet-config.json'),
+  path.resolve(new URL('.', import.meta.url).pathname, 'firebase-applet-config.json'),
+  path.resolve(new URL('.', import.meta.url).pathname, '../firebase-applet-config.json'),
+];
+
+for (const p of possiblePaths) {
+  try {
+    const cleanPath = p.replace(/^file:\/\//, '');
+    if (fs.existsSync(cleanPath)) {
+      firebaseConfig = JSON.parse(fs.readFileSync(cleanPath, 'utf8'));
+      break;
+    }
+  } catch (err) {
+    // Ignore and try next
+  }
+}
+
+if (!firebaseConfig) {
+  try {
+    firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
+  } catch (err: any) {
+    console.error("CRITICAL: Failed to load firebase-applet-config.json:", err);
+    throw new Error("Missing firebase-applet-config.json. Please ensure it is present at the root of the project.");
+  }
+}
+
+export const app = express();
 app.use(express.json());
 
 const PORT = 3000;
@@ -287,4 +314,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.VERCEL !== '1') {
+  startServer();
+}
