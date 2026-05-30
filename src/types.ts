@@ -29,4 +29,5 @@ export interface ShortsJob {
   createdAt: string;
   updatedAt: string;
   error?: string;
+  transcript?: string;
 }
