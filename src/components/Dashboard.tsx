@@ -112,7 +112,26 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
         })
       });
 
-      const data = await response.json();
+      // Safely inspect content-type of the response before parsing as JSON
+      const contentType = response.headers.get('content-type') || '';
+      let data: any = {};
+
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const textResponse = await response.text();
+        // Extract any potential readable text block from the HTML if possible
+        const cleanSnippet = textResponse
+          .replace(/<[^>]*>/g, ' ') // Strip HTML tags to extract raw message
+          .replace(/\s+/g, ' ')
+          .trim();
+        const snippet = cleanSnippet.length > 180 
+          ? cleanSnippet.substring(0, 180) + '...' 
+          : cleanSnippet || 'Empty response body';
+          
+        throw new Error(`Server returned an HTML/text error page (Status: ${response.status}). If the application server has not finished starting or is missing API keys, this may be a gateway or error page. Details: "${snippet}"`);
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Request submission returned error status.');
       }
