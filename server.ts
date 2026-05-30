@@ -281,6 +281,13 @@ async function startServer() {
   });
 }
 
-if (process.env.VERCEL !== '1') {
+// Only start standalone server when not in a serverless function context (e.g. Vercel, Google Cloud Functions)
+const isServerless = !!process.env.VERCEL || 
+                     !!process.env.FUNCTION_TARGET || 
+                     !!process.env.FUNCTIONS_SIGNATURE_TYPE ||
+                     !!process.env.LAMBDA_TASK_ROOT ||
+                     !!process.env._HANDLER;
+
+if (!isServerless) {
   startServer();
 }
