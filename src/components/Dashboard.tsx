@@ -1,5 +1,5 @@
 import { useState, useEffect, MouseEvent } from 'react';
-import { collection, query, where, onSnapshot, getDocs, doc, deleteDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, doc, deleteDoc, orderBy, setDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { ShortsJob, TikTokClip } from '../types';
 import { Plus, Link, Timer, Film, Edit, Sparkles, Youtube, CheckCircle2, AlertTriangle, LogOut, Check, ArrowRight } from 'lucide-react';
@@ -136,10 +136,62 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
         throw new Error(data.error || 'Request submission returned error status.');
       }
 
-      setYoutubeUrl('');
-      if (data.jobId) {
-        setActiveJobId(data.jobId);
+      const jobId = data.jobId;
+      if (!jobId) {
+        throw new Error('Analysis completed but no job ID was returned.');
       }
+
+      // Helper to turn HH:MM:SS to seconds
+      const parseTimeToSec = (ts: string): number => {
+        const parts = ts.split(':').map(Number);
+        if (parts.length === 3) {
+          return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        }
+        return 0;
+      };
+
+      const jobDoc = {
+        id: jobId,
+        userId: user.uid,
+        youtubeUrl: urlStr,
+        status: 'completed',
+        videoTitle: data.videoTitle || 'Scanned Video',
+        videoThumbnail: data.videoThumbnail,
+        duration: data.duration || 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // 1. Create Job document in Firestore
+      await setDoc(doc(db, 'jobs', jobId), jobDoc);
+
+      // 2. Create sub-clips in Firestore
+      const clipsList = data.clips || [];
+      for (let i = 0; i < clipsList.length; i++) {
+        const targetClip = clipsList[i];
+        const clipId = `clip_${i + 1}`;
+        const startSec = parseTimeToSec(targetClip.start_timestamp);
+        const endSec = parseTimeToSec(targetClip.end_timestamp) || (startSec + 45);
+
+        const dbClipDoc = {
+          id: clipId,
+          jobId,
+          hookTitle: targetClip.hookTitle || `Viral Chapter #${i + 1}`,
+          start_timestamp: targetClip.start_timestamp,
+          end_timestamp: targetClip.end_timestamp,
+          startSec,
+          endSec,
+          videoUrl: null,
+          status: 'pending',
+          subtitles: targetClip.subtitles || [],
+          createdAt: new Date().toISOString()
+        };
+
+        await setDoc(doc(db, 'jobs', jobId, 'clips', clipId), dbClipDoc);
+      }
+
+      setYoutubeUrl('');
+      setActiveJobId(jobId);
     } catch (err: any) {
       console.error(err);
       setFormError(err.message || 'An error occurred triggering the AI pipeline.');

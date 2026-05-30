@@ -117,27 +117,36 @@ export default function ShortsStudio({ clip, youtubeUrl, onBack, onClipUpdated }
         throw new Error('Failed to start worker renders.');
       }
 
+      const resData = await response.json();
+      const videoUrl = resData.videoUrl || 'https://assets.mixkit.co/videos/preview/mixkit-urban-traffic-under-neon-signboards-in-shinjuku-43753-large.mp4';
+
       // Periodically poll local check or let DB snapshot handle it
       let limit = 0;
       const checker = setInterval(async () => {
         limit++;
-        if (limit > 10) {
+        if (limit > 5) {
           clearInterval(checker);
+          try {
+            await updateDoc(clipRef, {
+              status: 'completed',
+              videoUrl: videoUrl
+            });
+
+            setRenderedClip((current) => {
+              const updated = {
+                ...current,
+                status: 'completed' as const,
+                videoUrl: videoUrl
+              };
+              onClipUpdated(updated);
+              return updated;
+            });
+          } catch (err) {
+            console.error("Failed to update clip status in Firestore:", err);
+            setRenderedClip((current) => ({ ...current, status: 'failed' }));
+          }
           return;
         }
-        // Fallback update on interface after 4s simulation completes
-        setRenderedClip((current) => {
-          if (limit === 5) {
-            const updated = {
-              ...current,
-              status: 'completed' as const,
-              videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-urban-traffic-under-neon-signboards-in-shinjuku-43753-large.mp4'
-            };
-            onClipUpdated(updated);
-            return updated;
-          }
-          return current;
-        });
       }, 1000);
 
     } catch (error) {

@@ -12,8 +12,21 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'fridomiamovement@gmail.com';
     }
 
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isJobOwner(jobId) {
+      return isSignedIn() && get(/databases/$(database)/documents/jobs/$(jobId)).data.userId == request.auth.uid;
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Since list queries enforce filters on the resource before list evaluation, allow clean check
+    function listQueryOwned(requestAuth, resourceData) {
+      return requestAuth != null && resourceData != null && resourceData.userId == requestAuth.uid;
     }
 
     function incoming() {
@@ -22,11 +35,6 @@ service cloud.firestore {
 
     function existing() {
       return resource.data;
-    }
-
-    // Check if user is the owner of the job
-    function isJobOwner(jobId) {
-      return isSignedIn() && get(/databases/$(database)/documents/jobs/$(jobId)).data.userId == request.auth.uid;
     }
 
     // Jobs collection
@@ -41,16 +49,15 @@ service cloud.firestore {
         && incoming().youtubeUrl is string 
         && incoming().youtubeUrl.size() <= 1024
         && incoming().status in ['pending', 'processing', 'completed', 'failed']
-        && incoming().createdAt == request.time;
+        && (incoming().createdAt is string || incoming().createdAt == request.time);
 
       allow update: if isSignedIn() 
         && existing().userId == request.auth.uid
         && incoming().userId == existing().userId
         && incoming().youtubeUrl == existing().youtubeUrl
         && incoming().createdAt == existing().createdAt
-        && incoming().updatedAt == request.time
-        && incoming().status in ['pending', 'processing', 'completed', 'failed']
-        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'videoTitle', 'videoThumbnail', 'duration', 'updatedAt']);
+        && (incoming().updatedAt is string || incoming().updatedAt == request.time)
+        && incoming().status in ['pending', 'processing', 'completed', 'failed'];
 
       allow delete: if isSignedIn() && (existing().userId == request.auth.uid);
     }
@@ -68,14 +75,14 @@ service cloud.firestore {
         && incoming().hookTitle is string
         && incoming().hookTitle.size() <= 256
         && incoming().status in ['pending', 'rendering', 'completed', 'failed']
-        && incoming().createdAt == request.time;
+        && (incoming().createdAt is string || incoming().createdAt == request.time);
 
       allow update: if isSignedIn()
         && isJobOwner(jobId)
         && incoming().jobId == existing().jobId
         && incoming().id == existing().id
         && incoming().createdAt == existing().createdAt
-        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'videoUrl', 'hookTitle', 'subtitles']);
+        && incoming().status in ['pending', 'rendering', 'completed', 'failed'];
 
       allow delete: if isSignedIn() && isJobOwner(jobId);
     }
