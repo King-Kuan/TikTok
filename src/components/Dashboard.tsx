@@ -30,6 +30,7 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
   
   // Submission forms
   const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [transcript, setTranscript] = useState('');
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   
@@ -110,7 +111,8 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           youtubeUrl: urlStr,
-          userId: user.uid
+          userId: user.uid,
+          transcript: transcript
         })
       });
 
@@ -201,6 +203,7 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
       }
 
       setYoutubeUrl('');
+      setTranscript('');
       setActiveJobId(jobId);
     } catch (err: any) {
       console.error(err);
@@ -296,6 +299,17 @@ export default function Dashboard({ onSelectClip }: DashboardProps) {
                   onChange={(e) => setYoutubeUrl(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder-slate-600 font-mono"
                   required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-450 uppercase font-mono tracking-wider font-bold">Paste Video Transcript (Recommended)</label>
+                <textarea
+                  placeholder="Paste YouTube transcript/captions context here... AI will scan this script directly to mark exact viral moments."
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  rows={4}
+                  className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder-slate-600 font-mono resize-none"
                 />
               </div>
 

@@ -33,7 +33,7 @@ function getYoutubeId(url: string): string | null {
 
 // 1. Submit synchronous process job (instant AI analysis)
 app.post('/api/process', async (req, res) => {
-  const { youtubeUrl, userId } = req.body;
+  const { youtubeUrl, userId, transcript } = req.body;
 
   if (!youtubeUrl) {
     return res.status(400).json({ error: 'youtubeUrl is required' });
@@ -56,15 +56,28 @@ app.post('/api/process', async (req, res) => {
   }
 
   try {
-    // Prepare advanced prompt utilizing search grounding to retrieve actual YouTube metadata
-    const analysisPrompt = `Analyze this YouTube video link: ${youtubeUrl}.
-1. Search via Google to retrieve the actual, real video title and its topic context.
-2. Based on this topic, break down the content and identify high-value viral TikTok shorts clips. Target up to 20 clips if the video is long enough, or fewer (down to 5) if the video is short. Each segment should represent a continuous 30-60 seconds context.
+    let analysisPrompt = '';
+    let systemInstruction = '';
+
+    if (transcript) {
+      analysisPrompt = `Here is the transcript of the video (${youtubeUrl}):
+--- START TRANSCRIPT ---
+${transcript}
+--- END TRANSCRIPT ---
+
+Based on this transcript, identify between 5 and 20 high-engagement, viral clips (each 30-60s long). Provide a hookTitle (e.g. "The $10,000 Secret.. 🤫"), precise start_timestamp, and end_timestamp relative to the video, and a subset of 10-15 word subtitles with precise millisecond timings relative to the start of the clip. Ensure you conform strictly to the responseSchema.`;
+      systemInstruction = `You are a professional TikTok creator. You must read and analyze the provided text transcript to mark exact high-value viral moments. From the script content, create 30-60s shorts, draft a strong hook, and extract word-by-word subtitles with millisecond offsets relative to the clip start.`;
+    } else {
+      analysisPrompt = `Analyze this YouTube video link: ${youtubeUrl}.
+1. Search via Google to retrieve the actual, real video title, topic context, or transcript.
+2. Based on this contextual information, break down the content and identify high-value viral TikTok shorts clips. Target up to 20 clips if the video is long enough, or fewer (down to 5) if the video is short. Each segment should represent a continuous 30-60 seconds context.
 3. For each segment, provide:
    - A highly engaging hookTitle (e.g. "The $10,000 Secret.. 🤫")
    - A precise 'start_timestamp' (HH:MM:SS) and 'end_timestamp'
-   - A list of word-by-word subtitle simulation. To keep response payload structured and avoid token limits, generate word-by-word subtitles containing 10-15 key words for the primary hook statement of that clip segment relative to the start of the clip. Conform timestamps (start_ms, end_ms) so they play correctly.
+   - A list of word-by-word subtitle simulation containing 10-15 key words for the primary hook statement of that clip segment relative to the start of the clip. Conform timestamps (start_ms, end_ms) so they play correctly.
 4. Conform strictly to the responseSchema provided.`;
+      systemInstruction = `You are an expert TikTok editor. Identify between 5 and 20 high-engagement segments (30-60s each) that open with an immediate hook. For each segment, provide word-by-word subtitles with millisecond timestamps relative to the start of that specific clip. Minimize total words to stay within payload limits.`;
+    }
 
     let outputObj: any = null;
 
@@ -73,9 +86,9 @@ app.post('/api/process', async (req, res) => {
         model: 'gemini-3.5-flash',
         contents: analysisPrompt,
         config: {
-          systemInstruction: `You are an expert TikTok editor. Identify between 5 and 20 high-engagement segments (30-60s each) that open with an immediate hook. For each segment, provide word-by-word subtitles with millisecond timestamps relative to the start of that specific clip. Minimize total words to stay within payload limits.`,
+          systemInstruction,
           responseMimeType: 'application/json',
-          tools: [{ googleSearch: {} }], // Grounding for real YouTube info
+          tools: transcript ? [] : [{ googleSearch: {} }], // Grounding only when we don't have the explicit transcript
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -225,7 +238,7 @@ app.post('/api/process', async (req, res) => {
   }
 });
 
-// 2. Trigger active render (Simulated Remotion MP4 Render)
+// 2. Trigger active render (Simulated Remotion MP4 Render & Direct ImageKit Upload)
 app.post('/api/render', async (req, res) => {
   const { jobId, clipId } = req.body;
 
@@ -239,11 +252,57 @@ app.post('/api/render', async (req, res) => {
     'https://assets.mixkit.co/videos/preview/mixkit-creative-workspace-with-computer-of-vlogger-41656-large.mp4',
     'https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-video-editor-editing-colored-clips-40995-large.mp4'
   ];
-  const videoUrl = renderUrls[Math.floor(Math.random() * renderUrls.length)];
+  const sourceUrl = renderUrls[Math.floor(Math.random() * renderUrls.length)];
+
+  // Check if ImageKit keys are configured in process environment secrets
+  const isImageKitConfigured = !!process.env.IMAGEKIT_PRIVATE_KEY && 
+                               !!process.env.IMAGEKIT_PUBLIC_KEY && 
+                               !!process.env.IMAGEKIT_URL_ENDPOINT;
+
+  let finalVideoUrl = sourceUrl;
+  let savedToImageKit = false;
+  let imagekitMessage = 'Not configured. Add credentials in Settings > Secrets to save to your direct ImageKit media library!';
+
+  if (isImageKitConfigured) {
+    try {
+      console.log('Detected ImageKit credentials. Launching direct cloud upload...');
+      const authHeader = Buffer.from(process.env.IMAGEKIT_PRIVATE_KEY + ':').toString('base64');
+      const formData = new URLSearchParams();
+      formData.append('file', sourceUrl);
+      formData.append('fileName', `tiktok_short_${clipId}_${Date.now()}.mp4`);
+      formData.append('useUniqueFileName', 'true');
+
+      const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${authHeader}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formData.toString()
+      });
+
+      if (uploadRes.ok) {
+        const resJson = await uploadRes.json() as any;
+        finalVideoUrl = resJson.url;
+        savedToImageKit = true;
+        imagekitMessage = 'Successfully saved and optimized directly in your personal ImageKit account!';
+        console.log('Successfully uploaded clip to ImageKit:', finalVideoUrl);
+      } else {
+        const errText = await uploadRes.text();
+        console.error(`Failed to upload to ImageKit: ${uploadRes.status} ${errText}`);
+        imagekitMessage = `Upload error status received from ImageKit: ${uploadRes.status}`;
+      }
+    } catch (uploadError: any) {
+      console.error('Error uploading to ImageKit:', uploadError);
+      imagekitMessage = `ImageKit integration call exception: ${uploadError.message || uploadError}`;
+    }
+  }
 
   return res.json({ 
     success: true, 
-    videoUrl: videoUrl 
+    videoUrl: finalVideoUrl,
+    savedToImageKit,
+    imagekitMessage
   });
 });
 
@@ -281,5 +340,17 @@ async function startServer() {
   });
 }
 
-// Start the server directly
-startServer();
+// Only start standalone server when not in a serverless function context (e.g. Vercel, Google Cloud Functions)
+const isServerless = !!process.env.VERCEL || 
+                     !!process.env.NOW_REGION ||
+                     !!process.env.FUNCTION_TARGET || 
+                     !!process.env.FUNCTIONS_SIGNATURE_TYPE ||
+                     !!process.env.AWS_LAMBDA_FUNCTION_NAME ||
+                     !!process.env.LAMBDA_TASK_ROOT ||
+                     !!process.env._HANDLER ||
+                     (process.env.NODE_ENV === 'production' && !process.env.K_SERVICE && !process.env.PORT);
+
+if (!isServerless) {
+  startServer();
+}
+

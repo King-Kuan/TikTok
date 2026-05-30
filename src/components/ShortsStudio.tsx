@@ -19,6 +19,7 @@ export default function ShortsStudio({ clip, youtubeUrl, onBack, onClipUpdated }
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [styleMode, setStyleMode] = useState<SubtitleStyle>('tiktok');
   const [renderedClip, setRenderedClip] = useState<TikTokClip>(clip);
+  const [imagekitStatus, setImagekitStatus] = useState<string | null>(null);
   
   // Custom interactive editing fields
   const [editingSubIndex, setEditingSubIndex] = useState<number | null>(null);
@@ -123,6 +124,10 @@ export default function ShortsStudio({ clip, youtubeUrl, onBack, onClipUpdated }
 
       const resData = await response.json();
       const videoUrl = resData.videoUrl || 'https://assets.mixkit.co/videos/preview/mixkit-urban-traffic-under-neon-signboards-in-shinjuku-43753-large.mp4';
+
+      if (resData.imagekitMessage) {
+        setImagekitStatus(resData.imagekitMessage);
+      }
 
       // Periodically poll local check or let DB snapshot handle it
       let limit = 0;
@@ -485,6 +490,12 @@ export default function ShortsStudio({ clip, youtubeUrl, onBack, onClipUpdated }
                 <Download className="w-4 h-4" />
                 <span>Download Short (Ready on ImageKit)</span>
               </a>
+              {imagekitStatus && (
+                <div className={`p-3 rounded-xl border text-[11px] text-left ${imagekitStatus.includes('Successfully') ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-medium' : 'bg-slate-950/60 border-slate-800 text-slate-400'}`}>
+                  <span className="font-bold uppercase tracking-wider text-[8px] opacity-80 block mb-0.5">ImageKit Integration:</span>
+                  <p className="font-mono leading-tight">{imagekitStatus}</p>
+                </div>
+              )}
               <p className="text-[10px] text-center text-slate-500">
                 This link will automatically expire and be deleted from storage in 48 hours.
               </p>
