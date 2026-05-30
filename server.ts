@@ -5,10 +5,13 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, setDoc, updateDoc } from 'firebase/firestore';
 import dotenv from 'dotenv';
-import firebaseConfig from './firebase-applet-config.json';
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
+
+const firebaseConfigPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
 
 const app = express();
 app.use(express.json());
@@ -145,18 +148,18 @@ async function runBackgroundAIAnalysis(jobId: string, url: string, videoId: stri
     // Prepare advanced prompt utilizing search grounding to retrieve actual YouTube metadata
     const analysisPrompt = `Analyze this YouTube video link: ${url}.
 1. Search via Google to retrieve the actual, real video title and its topic context.
-2. Based on this topic, break down the content and identify exactly 20 highly engaging, viral TikTok shorts clips. Each segment should represent a continuous 30-60 seconds context.
+2. Based on this topic, break down the content and identify high-value viral TikTok shorts clips. Target up to 20 clips if the video is long enough, or fewer (down to 5) if the video is short. Each segment should represent a continuous 30-60 seconds context.
 3. For each segment, provide:
    - A highly engaging hookTitle (e.g. "The $10,000 Secret.. 🤫")
    - A precise 'start_timestamp' (HH:MM:SS) and 'end_timestamp'
-   - A list of word-by-word subtitle simulation. To keep response payload structured and avoid token limits, generate word-by-word subtitles containing 15-20 words for the main hook statement of that clip segment relative to the start of the clip. Conform timestamps (start_ms, end_ms) so they play correctly.
+   - A list of word-by-word subtitle simulation. To keep response payload structured and avoid token limits, generate word-by-word subtitles containing 10-15 key words for the primary hook statement of that clip segment relative to the start of the clip. Conform timestamps (start_ms, end_ms) so they play correctly.
 4. Conform strictly to the responseSchema provided.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.5-flash',
       contents: analysisPrompt,
       config: {
-        systemInstruction: `You are an expert TikTok editor. Identify exactly 20 high-engagement segments (30-60s each) that open with an immediate hook. For each segment, provide word-by-word subtitles with millisecond timestamps relative to the start of that specific clip.`,
+        systemInstruction: `You are an expert TikTok editor. Identify between 5 and 20 high-engagement segments (30-60s each) that open with an immediate hook. For each segment, provide word-by-word subtitles with millisecond timestamps relative to the start of that specific clip. Minimize total words to stay within payload limits.`,
         responseMimeType: 'application/json',
         tools: [{ googleSearch: {} }], // Grounding for real YouTube info
         responseSchema: {
@@ -199,7 +202,13 @@ async function runBackgroundAIAnalysis(jobId: string, url: string, videoId: stri
       throw new Error('Gemini returned an empty structured output response.');
     }
 
-    const outputObj = JSON.parse(outputText);
+    // Clean up possible markdown json wrapping before parsing
+    let cleanedText = outputText.trim();
+    if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```(?:json)?\n?|```$/g, '').trim();
+    }
+
+    const outputObj = JSON.parse(cleanedText);
     const videoTitle = outputObj.actualVideoTitle || `Viral Shorts from YouTube Link`;
     const duration = outputObj.estimatedDurationSecs || 600;
     const clipsList = outputObj.clips || [];
@@ -257,6 +266,15 @@ async function runBackgroundAIAnalysis(jobId: string, url: string, videoId: stri
     });
   }
 }
+
+// Global JSON Error Handler for robust API route error recovery
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("Express Route Error:", err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
+    stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
+  });
+});
 
 // Serving UI and handling Dev Middleware Setup
 
