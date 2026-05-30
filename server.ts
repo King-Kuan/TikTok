@@ -1,55 +1,17 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, updateDoc } from 'firebase/firestore';
 import dotenv from 'dotenv';
-import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
-
-const firebaseConfigPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
-let firebaseConfig: any = null;
-
-const possiblePaths = [
-  firebaseConfigPath,
-];
-
-if (typeof __dirname !== 'undefined') {
-  possiblePaths.push(path.resolve(__dirname, 'firebase-applet-config.json'));
-  possiblePaths.push(path.resolve(__dirname, '../firebase-applet-config.json'));
-}
-
-for (const p of possiblePaths) {
-  try {
-    if (fs.existsSync(p)) {
-      firebaseConfig = JSON.parse(fs.readFileSync(p, 'utf8'));
-      break;
-    }
-  } catch (err) {
-    // Ignore and try next
-  }
-}
-
-if (!firebaseConfig) {
-  try {
-    firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
-  } catch (err: any) {
-    console.error("CRITICAL: Failed to load firebase-applet-config.json:", err);
-    throw new Error("Missing firebase-applet-config.json. Please ensure it is present at the root of the project.");
-  }
-}
 
 export const app = express();
 app.use(express.json());
 
 const PORT = 3000;
-
-// Initialize Firebase App on Server Side
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 
 // Initialize Gemini SDK with custom Telemetry User-Agent
 const ai = new GoogleGenAI({
@@ -297,7 +259,10 @@ app.use((err: any, req: any, res: any, next: any) => {
 // Serving UI and handling Dev Middleware Setup
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction = process.env.NODE_ENV === 'production' || 
+                        fs.existsSync(path.resolve(process.cwd(), 'dist/index.html'));
+
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
