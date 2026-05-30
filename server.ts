@@ -13,15 +13,31 @@ app.use(express.json());
 
 const PORT = 3000;
 
-// Initialize Gemini SDK with custom Telemetry User-Agent
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Lazy initialization of Gemini client to prevent app-startup crashes when GEMINI_API_KEY is not defined
+let aiInstance: GoogleGenAI | null = null;
+function getGoogleGenAI(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("GEMINI_API_KEY environment variable is not defined - AI functions will use high-fidelity simulator fallback.");
+    return null;
+  }
+  if (!aiInstance) {
+    try {
+      aiInstance = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+    } catch (err: any) {
+      console.error("Failed to construct GoogleGenAI client:", err);
+      return null;
     }
   }
-});
+  return aiInstance;
+}
 
 // Helper: Extract YouTube ID
 function getYoutubeId(url: string): string | null {
@@ -48,9 +64,10 @@ app.post('/api/load-video-info', async (req, res) => {
   let transcriptText = '';
 
   try {
-    if (process.env.GEMINI_API_KEY) {
+    const aiClient = getGoogleGenAI();
+    if (aiClient) {
       console.log(`Analyzing YouTube URL to load transcript draft: ${youtubeUrl}`);
-      const response = await ai.models.generateContent({
+      const response = await aiClient.models.generateContent({
         model: 'gemini-3.5-flash',
         contents: `Analyze YouTube Video link: ${youtubeUrl}.
 1. Reason about the keywords, slug, or content markers inside the link to deduce its likely authentic video title.
@@ -78,6 +95,8 @@ Return the result in JSON shape matching the schema strictly.`,
         title = info.title || title;
         transcriptText = info.transcript || '';
       }
+    } else {
+      console.warn("GoogleGenAI client is unavailable (no API Key). Proceeding with fallback simulation.");
     }
   } catch (error: any) {
     const errMsg = error ? (error.message || String(error)) : "Unknown Error";
@@ -121,10 +140,6 @@ app.post('/api/process', async (req, res) => {
     ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` 
     : 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop&q=60';
 
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY is not defined in the backend server environment variables.' });
-  }
-
   try {
     let analysisPrompt = '';
     let systemInstruction = '';
@@ -152,7 +167,11 @@ Based on this transcript, identify between 5 and 20 high-engagement, viral clips
     let outputObj: any = null;
 
     try {
-      const response = await ai.models.generateContent({
+      const aiClient = getGoogleGenAI();
+      if (!aiClient) {
+        throw new Error('GEMINI_API_KEY environment variable is not defined or is empty.');
+      }
+      const response = await aiClient.models.generateContent({
         model: 'gemini-3.5-flash',
         contents: analysisPrompt,
         config: {
