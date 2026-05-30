@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "job": {
+      "title": "Job",
+      "description": "A YouTube processing job",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "youtubeUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed", "failed"] },
+        "videoTitle": { "type": "string" },
+        "videoThumbnail": { "type": "string" },
+        "duration": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "youtubeUrl", "status"]
+    },
+    "clip": {
+      "title": "Clip",
+      "description": "An extracted short TikTok segment from a job",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jobId": { "type": "string" },
+        "hookTitle": { "type": "string" },
+        "start_timestamp": { "type": "string" },
+        "end_timestamp": { "type": "string" },
+        "startSec": { "type": "number" },
+        "endSec": { "type": "number" },
+        "videoUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "rendering", "completed", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "subtitles": { "type": "array" }
+      },
+      "required": ["id", "jobId", "hookTitle", "status"]
+    }
+  },
+  "firestore": {
+    "/jobs/{jobId}": {
+      "schema": "job",
+      "description": "Collection of YouTube short generation jobs"
+    },
+    "/jobs/{jobId}/clips/{clipId}": {
+      "schema": "clip",
+      "description": "Collection of TikTok shorts segments extracted for a job"
+    }
+  }
+}

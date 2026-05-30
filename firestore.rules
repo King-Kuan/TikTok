@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Check if user is the owner of the job
+    function isJobOwner(jobId) {
+      return isSignedIn() && get(/databases/$(database)/documents/jobs/$(jobId)).data.userId == request.auth.uid;
+    }
+
+    // Jobs collection
+    match /jobs/{jobId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid);
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid);
+      
+      allow create: if isSignedIn() 
+        && isValidId(jobId) 
+        && incoming().userId == request.auth.uid
+        && incoming().id == jobId
+        && incoming().youtubeUrl is string 
+        && incoming().youtubeUrl.size() <= 1024
+        && incoming().status in ['pending', 'processing', 'completed', 'failed']
+        && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn() 
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().youtubeUrl == existing().youtubeUrl
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().status in ['pending', 'processing', 'completed', 'failed']
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'videoTitle', 'videoThumbnail', 'duration', 'updatedAt']);
+
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid);
+    }
+
+    // Clips subcollection
+    match /jobs/{jobId}/clips/{clipId} {
+      allow get: if isSignedIn() && isJobOwner(jobId);
+      allow list: if isSignedIn() && isJobOwner(jobId);
+
+      allow create: if isSignedIn()
+        && isJobOwner(jobId)
+        && isValidId(clipId)
+        && incoming().id == clipId
+        && incoming().jobId == jobId
+        && incoming().hookTitle is string
+        && incoming().hookTitle.size() <= 256
+        && incoming().status in ['pending', 'rendering', 'completed', 'failed']
+        && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn()
+        && isJobOwner(jobId)
+        && incoming().jobId == existing().jobId
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'videoUrl', 'hookTitle', 'subtitles']);
+
+      allow delete: if isSignedIn() && isJobOwner(jobId);
+    }
+  }
+}

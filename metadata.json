@@ -1,0 +1,6 @@
+{
+  "name": "Automated TikTok Shorts Generator",
+  "description": "An automated AI TikTok shorts editor that analyzes long-form videos, detects viral hooks with Gemini 2.0 Flash, and renders custom captioned clips.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
